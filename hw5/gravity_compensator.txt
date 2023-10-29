@@ -1,0 +1,85 @@
+void WalkingController::hip_compensator()
+{
+  double mass_total_ = 0, alpha;
+  mass_total_ = 47;
+
+  Eigen::Vector12d grav_ground_torque_;
+  Eigen::Vector12d grav_ground_torque_pre_;
+  Eigen::Vector12d grav_ground_torque_filtered_;
+
+  Eigen::Vector6d lTau, rTau;
+  lTau.setZero();
+  rTau.setZero();
+
+  Eigen::Matrix<double, 6, 6> j_lleg_foot = model_.getLegJacobian((DyrosJetModel::EndEffector) 0);
+  Eigen::Matrix<double, 6, 6> j_rleg_foot = model_.getLegJacobian((DyrosJetModel::EndEffector) 1);
+
+  Eigen::Matrix6d adjoint_lleg_foot;
+  Eigen::Matrix6d adjoint_rleg_foot;
+  Eigen::Matrix3d skew_lleg_foot;
+  Eigen::Matrix3d skew_rleg_foot;
+  Eigen::Vector3d foot_offset;
+  Eigen::Vector6d gravity_force;
+  Eigen::Vector3d supportfoot_offset_float_current;
+
+  gravity_force.setZero();
+  gravity_force(2) = -mass_total_*GRAVITY;
+  foot_offset.setZero();
+  foot_offset(2) = -0.095;
+  supportfoot_offset_float_current.setZero();
+
+  skew_lleg_foot = DyrosMath::skew(lfoot_float_current_.linear()*foot_offset);
+  skew_rleg_foot = DyrosMath::skew(rfoot_float_current_.linear()*foot_offset);
+
+  adjoint_lleg_foot.setIdentity();
+  adjoint_rleg_foot.setIdentity();
+
+  adjoint_lleg_foot.block<3, 3>(0, 3) = -skew_lleg_foot;
+  adjoint_rleg_foot.block<3, 3>(0, 3) = -skew_rleg_foot;
+
+  j_lleg_foot = adjoint_lleg_foot*j_lleg_foot;
+  j_rleg_foot = adjoint_rleg_foot*j_rleg_foot;
+
+  alpha = (com_float_current_(1) - rfoot_float_current_.translation()(1))/(lfoot_float_current_.translation()(1) - rfoot_float_current_.translation()(1));
+  if(alpha > 1)
+  {
+    alpha = 1;
+  }
+  else if(alpha < 0)
+  {
+    alpha = 0;
+  }
+
+  if(foot_step_(current_step_num_,6)==1 && walking_tick_ >= t_start_real_+t_double1_ && walking_tick_ < t_start_+t_total_-t_double2_-t_rest_last_) //left foot support
+  {
+    lTau = j_lleg_foot.transpose()*gravity_force;
+    rTau = model_.getLegGravTorque(1);
+  }
+  else if(foot_step_(current_step_num_,6)==0 && walking_tick_ >= t_start_real_+t_double1_ && walking_tick_ < t_start_+t_total_-t_double2_-t_rest_last_) //right foot support
+  {
+    rTau = j_rleg_foot.transpose()*gravity_force;
+    lTau = model_.getLegGravTorque(0);
+  }
+  else
+  {
+    lTau = (j_lleg_foot.transpose()*gravity_force)*alpha;
+    rTau = (j_rleg_foot.transpose()*gravity_force)*(1-alpha);
+  }
+
+  if(walking_tick_ == 0)
+  {grav_ground_torque_pre_.setZero();}
+
+  for (int i = 0; i < 6; i ++)
+  {
+    grav_ground_torque_(i) = lTau[i];
+    grav_ground_torque_(i+6) = rTau[i];
+  }
+
+  desired_q_(1) = desired_q_(1) + 0.0002*grav_ground_torque_(1);
+  desired_q_(2) = desired_q_(2) + 0.0004*grav_ground_torque_(2);
+  desired_q_(3) = desired_q_(3) + 0.0004*grav_ground_torque_(3);
+
+  desired_q_(7) = desired_q_(7) + 0.0002*grav_ground_torque_(7);
+  desired_q_(8) = desired_q_(8) + 0.0004*grav_ground_torque_(8);
+  desired_q_(9) = desired_q_(9) + 0.0004*grav_ground_torque_(9);
+}

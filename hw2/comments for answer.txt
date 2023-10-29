@@ -1,0 +1,7 @@
+ZMP generates 3 steps in real time based on the current step. (You can only create 3 steps based on the current step. The reason for saving 3 steps will be introduced in a future task.)
+
+The CoM constructed the function with exactly the same structure as the ZMP generation method.
+
+CoM only needs to have the current value without having to store the future three steps, but in the answer, we configured the function to store the future three steps just like ZMP. (Inefficient)
+
+Thank you.
